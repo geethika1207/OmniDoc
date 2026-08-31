@@ -2,6 +2,7 @@ import asyncio
 from sqlalchemy.orm import Session
 
 from app.db.models import ParentChunk, ChildChunk
+from app.service.embeddings import embed_single_chunk
 
 async def process_and_store_chunks(full_text, session_id, file_name, db: Session):
     parent_size = 3000
@@ -33,7 +34,9 @@ async def process_and_store_chunks(full_text, session_id, file_name, db: Session
         # 2. Inner Loop: Child Chunks
         while child_start < parent_length:
             child_text = parent_text[child_start : child_start + child_size]
-            embedding = [0.0] * 384 
+            
+            # Replaced the fake zeros with your real Cohere function
+            embedding = embed_single_chunk(child_text)
 
             # Link the child using the newly generated database ID (db_parent.id)
             db_child = ChildChunk(
@@ -53,4 +56,5 @@ async def process_and_store_chunks(full_text, session_id, file_name, db: Session
         await asyncio.sleep(0)
 
     db.commit()
-    return f"Successfully chunked and saved {file_name} to the database."
+   
+    return f"Successfully chunked, embedded, and saved {file_name} to the database."
