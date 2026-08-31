@@ -1,5 +1,6 @@
 from groq import AsyncGroq
 from app.core.config import settings
+import re
 
 # Initializing the async Groq client
 client = AsyncGroq(api_key=settings.GROQ_API_KEY)
@@ -48,13 +49,38 @@ async def generate_suggested_questions(sample_texts: list):
 
     raw_response = await ask_groq(prompt)
     
-    # Clean up the AI's mess. Even if we tell it "no numbers", it sometimes 
-    # sneaks in bullet points or "1. ". This loop strips all that garbage out.
-
-    clean_questions = [
-        line.strip("- *1234567890. ") 
-        for line in raw_response.split('\n') 
-        if line.strip()
-    ]
+    clean_questions = []
     
-    return clean_questions
+    #Cleaning: Loop through the AI's response line by line
+    for line in raw_response.split('\n'):
+        line = line.strip()
+        
+        # Skip empty lines
+        if not line:
+            continue
+            
+        # Skipping obvious AI conversational filler that slipped through 
+        lower_line = line.lower()
+        if "here are" in lower_line or "sure" in lower_line or "questions:" in lower_line:
+            continue
+            
+        # Use Regex to  strip prefixes. 
+        # This removes: "1.", "1)", "- ", "* ", "Q:", "Q1:", "Question 1:", etc.
+        line = re.sub(r"^(?:[\d\.\-\*\)\s]+|q(?:uestion)?\s*\d*[\.\:\)]?\s*)", "", line, flags=re.IGNORECASE)
+        
+        # Strip stray quotation marks or markdown bolding the AI might have wrapped the text in
+        line = line.strip("\"'* ")
+        
+        # If there is still a valid string left (more than 5 chars), save it
+        if len(line) > 5:
+            clean_questions.append(line)
+            
+    # Fallback: Just in case the AI completely glitched and we filtered everything out
+    if not clean_questions:
+        return [
+            "What is the main topic of this document?", 
+            "Can you summarize the key points?"
+        ]
+        
+    # give exactly 3 questions
+    return clean_questions[:3]
