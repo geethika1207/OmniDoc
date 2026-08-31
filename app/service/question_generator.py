@@ -80,6 +80,7 @@ async def generate_suggested_questions(sample_texts: list):
         return [
             "What is the main topic of this document?", 
             "Can you summarize the key points?"
+            "What are the most important takeaways or conclusions?"
         ]
         
     # give exactly 3 questions
