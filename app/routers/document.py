@@ -21,7 +21,7 @@ async def upload_documents(
     print(f"Starting document processing: received {len(files)} file(s) from user {user_id}.")
 
     for file in files:
-        # Create your custom session ID
+        # Create custom session ID
         session_id = f"{file.filename}/{user_id}"
         
         # Load the PDF into memory
