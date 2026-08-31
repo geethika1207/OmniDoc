@@ -23,21 +23,27 @@ async def upload_documents(
         
     print(f"Starting document processing: received {len(files)} file(s) from user {user_id}.")
 
-    # 1. Generating one session ID for the entire batch upload
+    # Generating one session ID for the entire batch upload
     session_id = str(uuid.uuid4())
-    
+
+    # all_sample_texts contains the file samples that is the frst few pages of the pdf for all the user uploaded pdfs
+
     all_sample_texts = []
 
     for file in files:
-        # 2. We no longer generate a unique ID here. Every file shares the batch session_id.
+        # Here every file shares the batch session_id.
         reader = PdfReader(file.file)
+
+        # full_text is used for parent child chunking and file_sample is used to generate pop up questions
         full_text, file_sample = await extract_pdf_content(reader)
         all_sample_texts.append(file_sample)
-        
+
+        # It turns the full_text into multiple parent chunk and those parent chunk into multiple child chunks
         await process_and_store_chunks(full_text, session_id, file.filename, user_id, db)
         
     print(f"\nExtraction complete. Sending {len(all_sample_texts)} sample(s) ")
-        
+
+    # It generates pop up questions based on all the user uploaded pdfs
     suggested_questions = await generate_suggested_questions(all_sample_texts)
         
     print(f"Questions generated successfully: {suggested_questions}")
