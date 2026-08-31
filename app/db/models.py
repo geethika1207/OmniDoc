@@ -18,6 +18,7 @@ class ParentChunk(Base):
     
     id = Column(String, primary_key=True)
     session_id = Column(String, index=True, nullable=False)
+    user_id = Column(String, ForeignKey('users.id'), nullable=False) # <-- ADDED THIS
     file_name = Column(String, nullable=False)
     chunk_text = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -38,6 +39,7 @@ class Question(Base):
     
     id = Column(String, primary_key=True)
     session_id = Column(String, index=True, nullable=False)
+    user_id = Column(String, ForeignKey('users.id'), nullable=False)
     question = Column(Text, nullable=False)
     answer = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
