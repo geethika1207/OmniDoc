@@ -7,8 +7,8 @@ from app.db.database import get_db
 from app.core.security import get_current_user
 from app.service.pdf_processor import extract_pdf_content
 from app.service.parent_child_chunks import process_and_store_chunks
+from app.service.question_generator import generate_suggested_questions
 
-from app.db.models import ParentChunk, ChildChunk 
 
 router = APIRouter()
 
@@ -43,16 +43,13 @@ async def upload_documents(
         #Query the database for just the very first parent and its children
         # it lets  verify it worked without returning the entire PDF and crashing the browser
 
-        first_parent = db.query(ParentChunk).filter(ParentChunk.session_id == session_id).first()
-        first_children = []
-        if first_parent:
-            first_children = db.query(ChildChunk).filter(ChildChunk.parent_id == first_parent.id).all()
+    print(f"\nExtraction complete. Sending {len(all_sample_texts)} sample(s) ")
         
-        #Return a small part of the chunks to verifuy it works 
-        return {
-            "status": status_msg,
-            "parent_chunk_preview": first_parent.chunk_text[:300] + "..." if first_parent else None,
-            "child_chunks_created_for_this_parent": len(first_children),
-            "first_child_preview": first_children[0].chunk_text[:150] + "..." if first_children else None,
-            "first_child_embedding_sample": first_children[0].embedding[:3] if first_children else None # Just the first 3 vector numbers
+    suggested_questions = await generate_suggested_questions(all_sample_texts)
+        
+    print(f"Questions generated successfully: {suggested_questions}")
+
+    return {
+            "status": f"Successfully processed {len(files)} file(s).",
+            "suggested_questions": suggested_questions
         }
