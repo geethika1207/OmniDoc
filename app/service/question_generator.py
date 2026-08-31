@@ -46,13 +46,15 @@ async def generate_suggested_questions(sample_texts: list):
         {combined_text}
     """    
 
+    #  This is how the response looks like "What is the capital of France?\nWho wrote Hamlet?\nWhat is the speed of light?"
     raw_response = await ask_groq(prompt)
     
     clean_questions = []
+
+    # Since frontend and database need a structured array, we cannot just send that raw block of text. That is why we use .split('\n')
     
     for line in raw_response.split('\n'):
         line = line.strip()
-        
         if not line:
             continue
             
@@ -62,14 +64,15 @@ async def generate_suggested_questions(sample_texts: list):
             
         line = re.sub(r"^(?:[\d\.\-\*\)\s]+|q(?:uestion)?\s*\d*[\.\:\)]?\s*)", "", line, flags=re.IGNORECASE)
         line = line.strip("\"'* ")
-        
+
+        # Ensures that a random leftover character isn't accidentally saved as a valid question.
         if len(line) > 5:
             clean_questions.append(line)
             
     if not clean_questions:
         return [
             "What is the main topic of this document?", 
-            "Can you summarize the key points?",  # FIX 2: Added missing comma here
+            "Can you summarize the key points?",  
             "What are the most important takeaways or conclusions?"
         ]
         

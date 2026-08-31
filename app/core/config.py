@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     ACCESS_EXPIRETIME_MINUTES : int
     SECRET_KEY : str
     ALGORITHM : str
+    COHERE_API_KEY : str
+    GROQ_API_KEY : str
     class Config:
         env_file = str(ROOT_DIR / ".env")
 
