@@ -9,6 +9,14 @@ from app.core.security import get_current_user
 from app.service.pdf_processor import extract_pdf_content
 from app.service.parent_child_chunks import process_and_store_chunks
 from app.service.question_generator import generate_suggested_questions
+from app.service.chunk_retrieval import retrieve_context
+from app.service.llm_service import stream_completion
+
+# Streaming and concurrency utilities
+from fastapi.responses import StreamingResponse
+from starlette.concurrency import run_in_threadpool
+
+from app.schemas.document import ChatRequest
 
 router = APIRouter()
 
@@ -52,3 +60,27 @@ async def upload_documents(
         "session_id": session_id,
         "suggested_questions": suggested_questions
     }
+
+
+
+@router.post("/chat/{session_id}")
+
+async def chat_with_document(
+    session_id: str,
+    request: ChatRequest,
+    db: Session = Depends(get_db)
+):
+    # Running the heavy database search in a background thread so the server doesn't freeze
+    context_text = await run_in_threadpool(
+        retrieve_context, session_id, request.question, db
+    )
+    
+    if not context_text:
+        raise HTTPException(
+            status_code=404, 
+            detail="No relevant context found. Please ensure the document is uploaded."
+        )
+        
+    # Passing the found text to the LLM and stream the response right back to the frontend
+    generator = stream_completion(context_text, request.question)
+    return StreamingResponse(generator, media_type="text/plain")
