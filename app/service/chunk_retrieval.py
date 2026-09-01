@@ -35,11 +35,24 @@ async def retrieve_context(session_id: str, question: str, db: AsyncSession) -> 
     )
     parent_result = await db.execute(parent_stmt)
     parent_chunks_from_db = parent_result.scalars().all()
+
     
     # Mapping and re-order parent texts
-    parent_text_map = {parent.id: parent.chunk_text for parent in parent_chunks_from_db}
-    final_ordered_texts = [
-        parent_text_map[pid] for pid in unique_parent_ids if pid in parent_text_map
-    ]
+    # Restoring original vector rank order using a simple dictionary
+
+    parent_text_map = {}
+    for parent in parent_chunks_from_db:
+        parent_text_map[parent.id] = parent.chunk_text
         
-    return "\n\n".join(final_ordered_texts).strip()
+    final_ordered_texts = []
+    for parent_id in unique_parent_ids:
+        # Checking if the ID exists in our map before adding it
+        if parent_id in parent_text_map:
+            final_ordered_texts.append(parent_text_map[parent_id])
+            
+    # Merge everything into one bug string for the LLM
+    final_context_string = ""
+    for text in final_ordered_texts:
+        final_context_string = final_context_string + text + "\n\n"
+        
+    return final_context_string.strip()
