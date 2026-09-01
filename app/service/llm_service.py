@@ -1,4 +1,8 @@
+from typing import AsyncGenerator
+import litellm
+from litellm import token_counter
 from app.core.config import settings
+
 
 # Map internal provider keys to the exact LiteLLM model strings
 MODELS = {
@@ -25,7 +29,7 @@ GEMINI_MAX_LIMIT = 1000000
 def build_messages(context: str, question: str) -> list[dict]:
 
     # Instructions that are given to a system
-    
+
     system_prompt = (
         "You are an expert Document Analysis and Retrieval Assistant. Your primary objective "
         "is to provide accurate, concise, and factually grounded answers strictly based on the provided context.\n\n"
@@ -45,10 +49,57 @@ def build_messages(context: str, question: str) -> list[dict]:
         "4. **Contradictions or Ambiguity**:\n"
         "   - If the context contains conflicting details on the topic, highlight the different viewpoints as presented in the text without taking a side."
     )
-    
+
+    # Structuring the user prompt for the context and query
     user_prompt = f"### Context:\n{context}\n\n### Question:\n{question}\n\n### Answer:"
-    
+
+    # Returning standard LiteLLM chat completion message schema
     return [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt}
     ]
+
+
+
+async def stream_completion(context: str, question: str) -> AsyncGenerator[str, None]:
+
+    messages = build_messages(context, question)
+    
+    # Count the tokens to figure out how big the token is
+    token_count = token_counter(model="gpt-3.5-turbo", messages=messages)
+
+    # If the document is way too huge (over 1M tokens), have to chop it down
+
+    if token_count > GEMINI_MAX_LIMIT:
+
+        # Leaving a 2,000 token buffer for the system prompt, assuming ~4 chars per token
+        max_allowed_chars = (GEMINI_MAX_LIMIT - 2000) * 4
+        
+        # Slice off the extra text so the API doesn't crash with a length error
+        context = context[:max_allowed_chars]
+        
+        # Rebuild the messages and recount just checking for safe
+        messages = build_messages(context, question)
+        token_count = token_counter(model="gpt-3.5-turbo", messages=messages)
+
+        
+    # Pick the right LLM based on the size of the request
+
+    if token_count <= GROQ_LIMIT:
+        # Use Groq for small context because it's super fast
+        chosen_provider = "groq"
+
+    elif token_count <= COHERE_LIMIT:
+        # Command-R handles medium-sized context well
+        chosen_provider = "cohere"
+
+    else:
+        # Fallback to Gemini for massive documents
+        chosen_provider = "gemini"
+
+        
+    exact_model = MODELS[chosen_provider]
+    chosen_api_key = API_KEYS[chosen_provider]
+    
+    # Just a dummy yield for now so Python doesn't show error about the AsyncGenerator return type
+    yield ""
