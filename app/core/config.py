@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     ALGORITHM : str
     COHERE_API_KEY : str
     GROQ_API_KEY : str
+    GEMINI_API_KEY : str 
     class Config:
         env_file = str(ROOT_DIR / ".env")
 
