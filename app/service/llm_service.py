@@ -100,6 +100,24 @@ async def stream_completion(context: str, question: str) -> AsyncGenerator[str, 
         
     exact_model = MODELS[chosen_provider]
     chosen_api_key = API_KEYS[chosen_provider]
+
     
-    # Just a dummy yield for now so Python doesn't show error about the AsyncGenerator return type
-    yield ""
+    # stream=True  gives us the typing effect
+    response = await litellm.acompletion(
+        model=exact_model,
+        messages=messages,
+        api_key=chosen_api_key,
+        stream=True
+    )
+    
+
+    async for chunk in response:
+        # Make sure the chunk isn't empty or broken
+        if chunk.choices and len(chunk.choices) > 0:
+
+            # Using getattr prevents a crash if 'content' happens to be missing
+            delta = getattr(chunk.choices[0].delta, "content", None)
+            
+            # If there's actual text, give to the frontend
+            if delta:
+                yield delta
