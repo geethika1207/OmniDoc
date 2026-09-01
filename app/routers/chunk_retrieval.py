@@ -1,15 +1,13 @@
-# app/api/endpoints/chat.py
-from fastapi import APIRouter
-from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
-from app.db.database import get_db
 from app.service.embeddings import embed_single_chunk
 from app.db.models import ChildChunk, ParentChunk
 
 
 def retrieve_context(session_id: str, question: str, db: Session) -> str:
+    # Embed user question
     question_vector = embed_single_chunk(question)
     
+    # Searching top 10 child chunks by Cosine Distance
     relevant_children = (
         db.query(ChildChunk)
         .filter(ChildChunk.session_id == session_id)
@@ -21,13 +19,13 @@ def retrieve_context(session_id: str, question: str, db: Session) -> str:
     if not relevant_children:
         return ""
         
-
+    # Extract and deduplicate parent IDs preserving order
     unique_parent_ids = []
     for child in relevant_children:
         if child.parent_id not in unique_parent_ids:
             unique_parent_ids.append(child.parent_id)
-
             
+    # Fetching full parent chunks
     parent_chunks_from_db = (
         db.query(ParentChunk)
         .filter(
@@ -36,9 +34,22 @@ def retrieve_context(session_id: str, question: str, db: Session) -> str:
         )
         .all()
     )
-
-    context_string = ""
+    
+    # Restore original vector rank order
+    
+    parent_text_map = {}
     for parent in parent_chunks_from_db:
-        context_string = context_string + parent.chunk_text + "\n\n"
+        parent_text_map[parent.id] = parent.chunk_text
         
-    return context_string.strip()
+    final_ordered_texts = []
+    for parent_id in unique_parent_ids:
+        if parent_id in parent_text_map:
+            final_ordered_texts.append(parent_text_map[parent_id])
+            
+    #  Merge into a single context string
+
+    final_context_string = ""
+    for text in final_ordered_texts:
+        final_context_string = final_context_string + text + "\n\n"
+        
+    return final_context_string.strip()
