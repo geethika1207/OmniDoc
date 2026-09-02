@@ -8,9 +8,10 @@ st.write("Upload multi-PDF documents and ask questions with low-latency hierarch
 
 st.info(
     "👋 **Welcome to OmniDoc!**\n\n"
-    "Upload one or more PDF documents to generate hierarchical parent-child embeddings with PGVector, "
-    "get AI-suggested starter questions, and chat with your documents in real-time."
+    "Upload one or more PDF documents to analyze their content, get smart starter questions, "
+    "and chat with your files in real time."
 )
+
 
 # Live Render backend URL
 API_URL = "https://omnidoc-fiak.onrender.com"
@@ -149,8 +150,7 @@ elif not st.session_state.session_id:
             st.warning("Please select at least one PDF file to upload!")
         else:
             with st.spinner(
-                "Extracting PDF text, chunking into parent-child blocks, generating Cohere embeddings, "
-                "and indexing into PGVector...\n\n"
+                "Reading documents, organizing key sections, and preparing AI search...\n\n"
                 "⏳ *This usually takes a few seconds. Please wait...*"
             ):
                 try:
