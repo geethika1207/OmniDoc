@@ -24,6 +24,7 @@ async def process_and_store_chunks(
         parent_text = full_text[parent_start : parent_start + parent_size]
         new_parent_id = str(uuid.uuid4())
 
+        # Creating and add parent
         db_parent = ParentChunk(
             id=new_parent_id,
             session_id=session_id,
@@ -52,7 +53,10 @@ async def process_and_store_chunks(
         parent_start += parent_size
         await asyncio.sleep(0)
 
-    # Batch embed all child chunks in one request instead of one-by-one
+    # FLUSH PARENTS FIRST: Ensures all parent_chunks are written to DB
+    await db.flush()
+
+    # Now embed and insert child chunks
     if pending_children:
         child_texts = [child["text"] for child in pending_children]
         embeddings = embed_batch_chunks(child_texts, input_type="search_document")
@@ -69,6 +73,6 @@ async def process_and_store_chunks(
             )
             db.add(db_child)
 
+    # Final commit for everything
     await db.commit()
-    
     return f"Successfully chunked, embedded, and saved {file_name} to the database."

@@ -20,7 +20,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="OmniDoc API", lifespan=lifespan)
 
 app.include_router(auth.router)
-app.include_router(document.router, prefix="/api") 
+app.include_router(document.router) 
 
 @app.get("/")
 def health_check():
