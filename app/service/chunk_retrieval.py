@@ -4,7 +4,8 @@ from app.service.embeddings import embed_single_chunk
 from app.db.models import ChildChunk, ParentChunk
 
 async def retrieve_context(session_id: str, question: str, db: AsyncSession) -> str:
-    question_vector = embed_single_chunk(question)
+    # Use search_query input_type for search questions
+    question_vector = embed_single_chunk(question, input_type="search_query")
     
     # Async pgvector Cosine Distance Query
     stmt = (
@@ -25,7 +26,7 @@ async def retrieve_context(session_id: str, question: str, db: AsyncSession) -> 
         if child.parent_id not in unique_parent_ids:
             unique_parent_ids.append(child.parent_id)
             
-    # Fetching Parent Chunks asynchronously
+    # Fetch Parent Chunks asynchronously
     parent_stmt = (
         select(ParentChunk)
         .where(
@@ -36,21 +37,17 @@ async def retrieve_context(session_id: str, question: str, db: AsyncSession) -> 
     parent_result = await db.execute(parent_stmt)
     parent_chunks_from_db = parent_result.scalars().all()
 
-    
-    # Mapping and re-order parent texts
-    # Restoring original vector rank order using a simple dictionary
-
+    # Mapping and re-ordering parent texts to restore vector rank order
     parent_text_map = {}
     for parent in parent_chunks_from_db:
         parent_text_map[parent.id] = parent.chunk_text
         
     final_ordered_texts = []
     for parent_id in unique_parent_ids:
-        # Checking if the ID exists in our map before adding it
         if parent_id in parent_text_map:
             final_ordered_texts.append(parent_text_map[parent_id])
             
-    # Merge everything into one bug string for the LLM
+    # Merge everything into one string for the LLM
     final_context_string = ""
     for text in final_ordered_texts:
         final_context_string = final_context_string + text + "\n\n"
