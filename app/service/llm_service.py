@@ -6,8 +6,8 @@ from app.core.config import settings
 
 # Map internal provider keys to the exact LiteLLM model strings
 MODELS = {
-    "groq": "openai/gpt-oss-120b",
-    "cohere": "cohere/command-r",
+    "groq": "groq/openai/gpt-oss-120b",
+    "cohere": "cohere/command-r-08-2024",
     "gemini": "gemini/gemini-2.0-flash"
 }
 

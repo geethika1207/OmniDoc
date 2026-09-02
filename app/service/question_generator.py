@@ -10,7 +10,7 @@ async def ask_groq(prompt: str) -> str:
             model="openai/gpt-oss-120b",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.5,
-            max_tokens=150
+            max_tokens=800
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
