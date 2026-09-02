@@ -1,4 +1,4 @@
-from passlib.context import CryptContext
+import bcrypt
 from jose import jwt, JWTError
 from datetime import datetime, timedelta
 from fastapi.security import OAuth2PasswordBearer
@@ -9,17 +9,22 @@ from ..db.database import get_db
 from ..db import models
 from .config import settings
 
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")  
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='login')
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    pwd_bytes = password.encode('utf-8')[:72]
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(pwd_bytes, salt).decode('utf-8')
 
 
 def to_verify(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        pwd_bytes = plain_password.encode('utf-8')[:72]
+        hash_bytes = hashed_password.encode('utf-8')
+        return bcrypt.checkpw(pwd_bytes, hash_bytes)
+    except Exception:
+        return False
 
 
 ALGORITHM = settings.ALGORITHM
@@ -27,13 +32,11 @@ SECRET_KEY = settings.SECRET_KEY
 ACCESS_EXPIRETIME_MINUTES = settings.ACCESS_EXPIRETIME_MINUTES
 
 
-
 def create_token(data: dict) -> str:
     to_encode = data.copy()
     expire_time = datetime.utcnow() + timedelta(minutes=ACCESS_EXPIRETIME_MINUTES)
     to_encode.update({"exp": expire_time})  # Standard JWT expiration claim
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
 
 
 def verify_token(token: str, credentials_exception) -> str:
@@ -45,7 +48,6 @@ def verify_token(token: str, credentials_exception) -> str:
     except JWTError:
         raise credentials_exception
     return user_id
-
 
 
 async def get_current_user(
