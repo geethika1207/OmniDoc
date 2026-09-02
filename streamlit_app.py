@@ -69,7 +69,7 @@ with st.sidebar:
                                 login_res = requests.post(
                                     f"{API_URL}/login", 
                                     data={"username": email, "password": password},
-                                    timeout=30
+                                    timeout=60
                                 )
                                 if login_res.status_code in [200, 201]:
                                     data = login_res.json()
@@ -99,7 +99,7 @@ with st.sidebar:
                                 reg_res = requests.post(
                                     f"{API_URL}/user", 
                                     json={"email": reg_email, "password": reg_password},
-                                    timeout=30
+                                    timeout=60
                                 )
                                 if reg_res.status_code == 201:
                                     st.success("✅ Account created! Please select 'Log In' above to authenticate.")
@@ -237,7 +237,7 @@ else:
                     headers=headers,
                     json={"question": query_to_send},
                     stream=True,
-                    timeout=60
+                    timeout=90
                 )
 
                 if stream_res.status_code == 200:
