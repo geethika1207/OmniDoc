@@ -1,6 +1,6 @@
 import uuid
 from typing import List
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pypdf import PdfReader
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,25 +24,33 @@ async def upload_documents(
     db: AsyncSession = Depends(get_db)
 ):
     if not files:
-        raise HTTPException(status_code=400, detail="No files uploaded.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No files uploaded.")
         
     print(f"Starting document processing: received {len(files)} file(s) from user {current_user.id}.")
 
-    # Generating one session ID for the entire batch upload
     session_id = str(uuid.uuid4())
-    
-    # all_sample_texts contains the file samples that is the frst few pages of the pdf for all the user uploaded pdfs
     all_sample_texts = []
 
     for file in files:
-        # Here every file shares the batch session_id.
-        reader = PdfReader(file.file)
-        
-        # full_text is used for parent child chunking and file_sample is used to generate pop up questions
-        full_text, file_sample = await extract_pdf_content(reader)
-        all_sample_texts.append(file_sample)
+        if not file.filename.lower().endswith(".pdf"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid file type for '{file.filename}'. Only PDF files are supported."
+            )
 
-        # It turns the full_text into multiple parent chunk and those parent chunk into multiple child chunks
+        try:
+            reader = PdfReader(file.file)
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Could not read PDF '{file.filename}'. The file may be corrupt or empty."
+            )
+        
+        full_text, file_sample = await extract_pdf_content(reader)
+        
+        if file_sample:
+            all_sample_texts.append(file_sample)
+
         await process_and_store_chunks(
             full_text=full_text,
             session_id=session_id,
@@ -51,17 +59,13 @@ async def upload_documents(
             db=db
         )
 
-    print(f"\nExtraction complete. Sending {len(all_sample_texts)} sample(s) ")
-
-    # It generates pop up questions based on all the user uploaded pdfs
     suggested_questions = await generate_suggested_questions(all_sample_texts)
-
-    print(f"Questions generated successfully: {suggested_questions}")
 
     return {
         "session_id": session_id,
         "suggested_questions": suggested_questions
     }
+
 
 @router.post("/chat/{session_id}")
 async def chat_with_document(
@@ -69,15 +73,13 @@ async def chat_with_document(
     request: ChatRequest,
     db: AsyncSession = Depends(get_db)
 ):
-    # Awaiting the native async database search to quickly find relevant document chunks
     context_text = await retrieve_context(session_id, request.question, db)
     
     if not context_text:
         raise HTTPException(
-            status_code=404, 
+            status_code=status.HTTP_404_NOT_FOUND, 
             detail="No relevant context found. Please ensure the document is uploaded."
         )
         
-    # Passing the found text to the LLM and stream the response right back to the frontend
     generator = stream_completion(context_text, request.question)
     return StreamingResponse(generator, media_type="text/plain")
