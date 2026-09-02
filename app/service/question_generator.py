@@ -2,7 +2,6 @@ from groq import AsyncGroq
 from app.core.config import settings
 import re
 
-# Initializing the async Groq client
 client = AsyncGroq(api_key=settings.GROQ_API_KEY)
 
 async def ask_groq(prompt: str) -> str:
@@ -12,19 +11,17 @@ async def ask_groq(prompt: str) -> str:
         temperature=0.5,
         max_tokens=150
     )
-    
-    # Returning the text 
     return response.choices[0].message.content.strip()
 
-
 async def generate_suggested_questions(sample_texts: list):
+    default_questions = [
+        "What is the main topic of this document?", 
+        "Can you summarize the key points?",
+        "What are the most important takeaways or conclusions?"
+    ]
 
     if not sample_texts:
-        return [
-            "What is the main topic of this document?", 
-            "Can you summarize the key points?",
-            "What are the most important takeaways or conclusions?"
-        ]
+        return default_questions
 
     combined_text = "\n\n".join(sample_texts)[:4000]
 
@@ -46,13 +43,14 @@ async def generate_suggested_questions(sample_texts: list):
         {combined_text}
     """    
 
-    #  This is how the response looks like "What is the capital of France?\nWho wrote Hamlet?\nWhat is the speed of light?"
-    raw_response = await ask_groq(prompt)
+    try:
+        raw_response = await ask_groq(prompt)
+    except Exception as e:
+        print(f"Warning: Question generation failed ({e}), returning default questions.")
+        return default_questions
     
     clean_questions = []
 
-    # Since frontend and database need a structured array, we cannot just send that raw block of text. That is why we use .split('\n')
-    
     for line in raw_response.split('\n'):
         line = line.strip()
         if not line:
@@ -65,15 +63,10 @@ async def generate_suggested_questions(sample_texts: list):
         line = re.sub(r"^(?:[\d\.\-\*\)\s]+|q(?:uestion)?\s*\d*[\.\:\)]?\s*)", "", line, flags=re.IGNORECASE)
         line = line.strip("\"'* ")
 
-        # Ensures that a random leftover character isn't accidentally saved as a valid question.
         if len(line) > 5:
             clean_questions.append(line)
             
     if not clean_questions:
-        return [
-            "What is the main topic of this document?", 
-            "Can you summarize the key points?",  
-            "What are the most important takeaways or conclusions?"
-        ]
+        return default_questions
         
     return clean_questions[:3]
