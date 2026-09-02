@@ -16,7 +16,6 @@ st.info(
 API_URL = "https://omnidoc-fiak.onrender.com"
 
 # --- INIT SESSION STATE ---
-# This keeps the user logged in and tracks session across button clicks
 if "auth_token" not in st.session_state:
     st.session_state.auth_token = None
 if "session_id" not in st.session_state:
@@ -26,11 +25,23 @@ if "suggested_questions" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# Helper function to safely parse API error response
+def get_error_message(res, default_msg="An error occurred"):
+    if res is None:
+        return default_msg
+    try:
+        data = res.json()
+        detail = data.get("detail", default_msg)
+        if isinstance(detail, list):
+            return "Please ensure all fields are filled out correctly."
+        return str(detail)
+    except Exception:
+        return f"{default_msg} (Server returned HTTP {res.status_code})"
+
 # 2. Sidebar Setup
 with st.sidebar:
     st.header("Authentication")
     
-    # If the user is already logged in, show a success message and a Logout button
     if st.session_state.auth_token:
         st.success("✅ You are securely logged in.")
         if st.button("Logout"):
@@ -38,9 +49,8 @@ with st.sidebar:
             st.session_state.session_id = None
             st.session_state.suggested_questions = []
             st.session_state.messages = []
-            st.rerun()  # Refresh the app to clear state
+            st.rerun()
             
-    # If the user is NOT logged in, show the Login/Register UI
     else:
         auth_mode = st.radio("Select Action", ["Log In", "Register", "Manual Token"])
         
@@ -51,28 +61,26 @@ with st.sidebar:
                 submit_login = st.form_submit_button("Log In")
                 
                 if submit_login:
-                    # FRONTEND VALIDATION: Check for empty fields
                     if not email or not password:
                         st.error("⚠️ Please enter both your email and password.")
                     else:
                         with st.spinner("Logging in..."):
-                            # OAuth2PasswordRequestForm expects 'username' and 'password' as form data
-                            login_res = requests.post(
-                                f"{API_URL}/login", 
-                                data={"username": email, "password": password}
-                            )
-                            if login_res.status_code in [200, 201]:
-                                # Save the token to session state
-                                st.session_state.auth_token = login_res.json().get("access_token")
-                                st.success("Logged in successfully!")
-                                st.rerun()  # Refresh the UI to hide the login form
-                            else:
-                                # CLEAN ERROR HANDLING: Catch Pydantic 422 lists safely
-                                error_detail = login_res.json().get("detail", "Invalid credentials")
-                                if isinstance(error_detail, list):
-                                    st.error("⚠️ Please ensure all fields are filled out correctly.")
+                            try:
+                                login_res = requests.post(
+                                    f"{API_URL}/login", 
+                                    data={"username": email, "password": password},
+                                    timeout=30
+                                )
+                                if login_res.status_code in [200, 201]:
+                                    data = login_res.json()
+                                    st.session_state.auth_token = data.get("access_token")
+                                    st.success("Logged in successfully!")
+                                    st.rerun()
                                 else:
-                                    st.error(f"Login failed: {error_detail}")
+                                    err_msg = get_error_message(login_res, "Invalid credentials")
+                                    st.error(f"Login failed: {err_msg}")
+                            except Exception as e:
+                                st.error(f"Connection Error: {e}")
                             
         elif auth_mode == "Register":
             with st.form("register_form"):
@@ -81,27 +89,25 @@ with st.sidebar:
                 submit_register = st.form_submit_button("Register")
                 
                 if submit_register:
-                    # FRONTEND VALIDATION: Prevent empty strings and short passwords
                     if not reg_email or not reg_password:
                         st.error("⚠️ Please enter both an email and a password.")
                     elif len(reg_password) < 4:
                         st.warning("⚠️ Password must be at least 4 characters long.")
                     else:
                         with st.spinner("Creating account..."):
-                            # Registration expects standard JSON
-                            reg_res = requests.post(
-                                f"{API_URL}/user", 
-                                json={"email": reg_email, "password": reg_password}
-                            )
-                            if reg_res.status_code == 201:
-                                st.success("✅ Account created! Please select 'Log In' above to authenticate.")
-                            else:
-                                # CLEAN ERROR HANDLING
-                                error_detail = reg_res.json().get("detail", "Error creating account")
-                                if isinstance(error_detail, list):
-                                    st.error("⚠️ Invalid email format or missing fields.")
+                            try:
+                                reg_res = requests.post(
+                                    f"{API_URL}/user", 
+                                    json={"email": reg_email, "password": reg_password},
+                                    timeout=30
+                                )
+                                if reg_res.status_code == 201:
+                                    st.success("✅ Account created! Please select 'Log In' above to authenticate.")
                                 else:
-                                    st.error(f"Registration failed: {error_detail}")
+                                    err_msg = get_error_message(reg_res, "Registration failed")
+                                    st.error(f"Registration failed: {err_msg}")
+                            except Exception as e:
+                                st.error(f"Connection Error: {e}")
                             
         elif auth_mode == "Manual Token":
             manual_token = st.text_input("Access Token / JWT", type="password")
@@ -115,7 +121,6 @@ with st.sidebar:
 
     st.divider()
     
-    # Session Reset in Sidebar
     if st.session_state.session_id:
         st.header("Active Session")
         st.info(f"📁 Session ID: `{st.session_state.session_id[:8]}...`")
@@ -129,7 +134,6 @@ with st.sidebar:
 if not st.session_state.auth_token:
     st.warning("🔒 Please log in or register in the sidebar to begin.")
 
-# Document Upload Step
 elif not st.session_state.session_id:
     st.subheader("📤 Step 1: Upload Your PDF Document(s)")
     uploaded_files = st.file_uploader(
@@ -159,11 +163,12 @@ elif not st.session_state.session_id:
                         for f in uploaded_files
                     ]
 
+                    # ✅ Points to /upload on live backend
                     response = requests.post(
-                        f"{API_URL}/api/upload",
+                        f"{API_URL}/upload",
                         headers=headers,
                         files=files_payload,
-                        timeout=120
+                        timeout=180
                     )
 
                     if response.status_code == 200:
@@ -176,18 +181,17 @@ elif not st.session_state.session_id:
                     elif response.status_code == 401:
                         st.error("🔒 Unauthorized (401): Invalid or expired access token. Please log out and log back in.")
                     else:
-                        st.error(f"🚨 Error {response.status_code}: {response.text}")
+                        err_msg = get_error_message(response, "Upload failed")
+                        st.error(f"🚨 Error: {err_msg}")
 
                 except requests.exceptions.Timeout:
                     st.error("The request timed out. Document processing took longer than expected.")
                 except requests.exceptions.RequestException as e:
                     st.error(f"Failed to connect to the backend: {e}")
 
-# Chat Step (When documents are indexed)
 else:
     st.subheader("💬 Step 2: Chat with Your Documents")
 
-    # Display AI Suggested Questions as Clickable Buttons
     if st.session_state.suggested_questions:
         st.write("💡 **AI Suggested Questions:**")
         cols = st.columns(len(st.session_state.suggested_questions[:3]))
@@ -198,15 +202,12 @@ else:
 
     st.divider()
 
-    # Display Chat History
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # Chat Input Bar
     user_query = st.chat_input("Ask a question about your uploaded documents...")
 
-    # Check if a suggested question was clicked or user typed in chat input
     needs_response = False
     query_to_send = ""
 
@@ -218,12 +219,10 @@ else:
         needs_response = True
 
     elif st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
-        # Handle case where user clicked a suggested question button
         if len(st.session_state.messages) % 2 == 1:
             query_to_send = st.session_state.messages[-1]["content"]
             needs_response = True
 
-    # Stream the Assistant Response
     if needs_response:
         with st.chat_message("assistant"):
             try:
@@ -232,8 +231,9 @@ else:
                     "Content-Type": "application/json"
                 }
 
+                # ✅ Points to /chat/{session_id} on live backend
                 stream_res = requests.post(
-                    f"{API_URL}/api/chat/{st.session_state.session_id}",
+                    f"{API_URL}/chat/{st.session_state.session_id}",
                     headers=headers,
                     json={"question": query_to_send},
                     stream=True,
@@ -254,7 +254,8 @@ else:
                 elif stream_res.status_code == 401:
                     st.error("Unauthorized. Please log out and log back in.")
                 else:
-                    st.error(f"Error {stream_res.status_code}: {stream_res.text}")
+                    err_msg = get_error_message(stream_res, "Streaming request failed")
+                    st.error(f"Error: {err_msg}")
 
             except requests.exceptions.RequestException as e:
                 st.error(f"Streaming error: {e}")
