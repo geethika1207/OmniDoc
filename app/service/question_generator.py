@@ -5,13 +5,17 @@ import re
 client = AsyncGroq(api_key=settings.GROQ_API_KEY)
 
 async def ask_groq(prompt: str) -> str:
-    response = await client.chat.completions.create(
-        model="openai/gpt-oss-120b", 
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.5,
-        max_tokens=150
-    )
-    return response.choices[0].message.content.strip()
+    try:
+        response = await client.chat.completions.create(
+            model="openai/gpt-oss-120b",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.5,
+            max_tokens=150
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"DEBUG - Groq API call failed: {e}")
+        return ""
 
 async def generate_suggested_questions(sample_texts: list):
     default_questions = [
@@ -43,12 +47,9 @@ async def generate_suggested_questions(sample_texts: list):
         {combined_text}
     """    
 
-    try:
-        raw_response = await ask_groq(prompt)
-    except Exception as e:
-        print(f"Warning: Question generation failed ({e}), returning default questions.")
-        return default_questions
-    
+    raw_response = await ask_groq(prompt)
+    print(f"DEBUG - Raw Groq response: {raw_response}")
+
     clean_questions = []
 
     for line in raw_response.split('\n'):
