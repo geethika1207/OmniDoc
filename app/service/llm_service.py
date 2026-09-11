@@ -49,10 +49,8 @@ def build_messages(context: str, question: str):
     )
 
 
+    # Structured context and user prompt for grounded generation
     user_prompt = f"### Context:\n{context}\n\n### Question:\n{question}\n\n### Formatted Answer:"
-
-    # Structuring the user prompt for the context and query
-    user_prompt = f"### Context:\n{context}\n\n### Question:\n{question}\n\n### Answer:"
 
     # Returning standard LiteLLM chat completion message schema
     return [
