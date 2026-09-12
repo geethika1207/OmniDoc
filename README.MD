@@ -8,6 +8,16 @@
 
 ---
 
+## 🌍 Live Deployments
+
+Test the active platform live:
+
+* **Frontend UI (Streamlit):** [https://omnidoc-app.streamlit.app/](https://omnidoc-app.streamlit.app/)
+* **Backend API (FastAPI Docs):** [https://omnidoc-fiak.onrender.com/docs](https://omnidoc-fiak.onrender.com/docs)
+
+---
+
+
 ## 🛠️ Built With
 
 ![Python](https://img.shields.io/badge/Python-3.11+-blue)
