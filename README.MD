@@ -113,29 +113,39 @@ flowchart TD
 * **Hierarchical Parent-Child Retrieval:** Standard RAG embeds entire text blocks, which degrades retrieval accuracy when chunks are large. OmniDoc creates granular 1,000-character "Child Chunks" solely for high-precision vector search, but resolves their foreign keys back to 3,000-character "Parent Chunks" for LLM synthesis. The model receives rich, complete context without suffering from boundary truncation.
 
 ```mermaid
-flowchart LR
-    subgraph Ingestion ["1. Granular Ingestion & Indexing"]
-        Doc["📄 PDF Document"] --> SplitP["✂️ Parent Chunker<br/>(3,000 chars)"]
-        SplitP --> P1["Parent Block #1"]
-        P1 --> SplitC["✂️ Child Chunker<br/>(1,000 chars | 200 overlap)"]
-        SplitC --> C1["Child 1A"]
-        SplitC --> C2["Child 1B"]
-        SplitC --> C3["Child 1C"]
-        C1 --> Embed["🧠 Cohere Embed v3<br/>(1024-d Dense Vector)"]
-        C2 --> Embed
-        C3 --> Embed
-        Embed --> DB_Index[("⚡ pgvector HNSW Index<br/>(Stores Child Vectors + FK parent_id)")]
+flowchart TD
+    subgraph Phase1 ["📦 Phase 1: Dual-Tier Ingestion & Storage"]
+        Doc["📄 Uploaded Multi-PDF Document"]
+        SplitParent["✂️ Step 1: Parent Chunking<br/>(3,000 Characters | Complete Semantic Context)"]
+        StoreParent[("🗄️ PostgreSQL 'parents' Table<br/>(Stores Full Context Passages)")]
+        SplitChild["✂️ Step 2: Child Chunking<br/>(1,000 Characters | 200-char Overlap for Precision)"]
+        EmbedChild["🧠 Cohere Embed v3 API<br/>(Generates 1024-d Dense Vectors)"]
+        StoreChild[("⚡ PostgreSQL 'child_chunks' Table<br/>(Indexed with pgvector HNSW m=16, ef=64 + Foreign Key parent_id)")]
+
+        Doc --> SplitParent
+        SplitParent -->|Commit Passage| StoreParent
+        SplitParent -->|Sub-divide| SplitChild
+        SplitChild --> EmbedChild
+        EmbedChild -->|Batch Insert Vectors + FK| StoreChild
     end
 
-    subgraph Retrieval ["2. High-Recall Context Assembly"]
-        Query["🔍 User Query"] --> Q_Embed["🧠 Cohere Query Vector"]
-        Q_Embed --> Cosine["📐 Cosine Distance Scan"]
-        Cosine --> DB_Index
-        DB_Index --> Match["Top Child Matches<br/>(Pinpoint Vector Accuracy)"]
-        Match --> Resolve["🔑 Resolve FK parent_id"]
-        Resolve --> ParentContext["🗄️ Full Parent Passage<br/>(3,000 chars rich context)"]
-        ParentContext --> LLM["🤖 LLM Synthesis<br/>(Zero boundary truncation)"]
+    subgraph Phase2 ["🔍 Phase 2: High-Recall Search & Context Reconstruction"]
+        UserQuery["💬 User Question"]
+        EmbedQuery["🧠 Cohere Embed API<br/>(search_query mode)"]
+        VectorSearch["📐 pgvector HNSW Cosine Distance Query<br/>(Fast Approximate Nearest-Neighbor Scan)"]
+        ResolveFK["🔑 Foreign Key Resolution & Deduplication<br/>(Maps child_chunk.parent_id to parents.id)"]
+        AssembleContext["📋 Full Context Reconstruction<br/>(Assembles complete 3,000-char parent passages)"]
+        FinalLLM["🤖 Dynamic LLM Inference (Sub-200ms TTFT)<br/>(Context fed to Groq / Cohere / Gemini)"]
+
+        UserQuery --> EmbedQuery
+        EmbedQuery --> VectorSearch
+        VectorSearch -->|Top Matched Child Chunks| ResolveFK
+        StoreParent -.->|Fetch Full Text by ID| ResolveFK
+        ResolveFK --> AssembleContext
+        AssembleContext --> FinalLLM
     end
+
+    StoreChild -.->|Index Vector Scan| VectorSearch
 ```
 
 * **Tuned HNSW Indexing on pgvector:** Vector tables are indexed using Hierarchical Navigable Small World (`HNSW`) graphs with parameters `m = 16` and `ef_construction = 64`. This yields an approximate nearest-neighbor query speed acceleration of **10×** compared to standard flat IVFFlat indexes without sacrificing recall.
