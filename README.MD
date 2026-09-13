@@ -15,6 +15,8 @@ Test the active platform live:
 * **Frontend UI (Streamlit):** [https://omnidoc-app.streamlit.app/](https://omnidoc-app.streamlit.app/)
 * **Backend API (FastAPI Docs):** [https://omnidoc-fiak.onrender.com/docs](https://omnidoc-fiak.onrender.com/docs)
 
+> **Note:** The backend service is hosted on Render's free tier. If the instance has spun down due to inactivity, the initial spin-up request may take ~50 seconds. Once active, streaming responses execute with sub-200ms TTFT.
+
 ---
 
 
